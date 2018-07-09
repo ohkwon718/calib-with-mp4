@@ -4,8 +4,15 @@
 import cv2
 import numpy as np
 
-# bShow = True
-bShow = False
+# filename = 'video/cali_cam1.MP4'
+# filename = 'video/cam1.MP4'
+lsFilename = ['video/cam1.MP4', 'video/cam1-1.MP4', 'video/cam1-2.MP4',
+    'video/cam1-3.MP4', 'video/cam1-3.MP4']
+
+
+nFrame4calib = 30
+bShow = True
+# bShow = False
 delay = 100
 
 nCorners = (5,7)
@@ -19,76 +26,77 @@ objpoints = [] # 3d point in real world space
 imgpoints = [] # 2d points in image plane.
 frames = []
 
-# cap = cv2.VideoCapture('video/cali_cam1.MP4')
-cap = cv2.VideoCapture('video/cam1.MP4')
-if (cap.isOpened()== False): 
-    print("Error opening video stream or file")
+nFrame = 0
+for filename in lsFilename:
+    cap = cv2.VideoCapture(filename)
+    if (cap.isOpened()== False): 
+        print("Error opening video stream or file")
 
-nFrame4calib = 30
-nFrameTotal = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    nFrame += int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    
 
-if nFrameTotal <= nFrame4calib:
-    idxs = np.arange(nFrameTotal)
+if nFrame <= nFrame4calib:
+    idxs = np.arange(nFrame)
 else:
-    idxs = np.linspace(0,nFrameTotal-1,nFrame4calib).astype(int)
+    idxs = np.linspace(0,nFrame-1,nFrame4calib).astype(int)
 
 print idxs.size
 
-i = 0
-while(cap.isOpened()):
-    ret, frame = cap.read()
-    if ret == True:
-        if i < idxs[0]:
-            i = i + 1
-            continue
-        print "frame ",i
-        
 
-        gray = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
-        find, corners = cv2.findChessboardCorners(gray, nCorners, None)
-        
-        if find == True:
-            objpoints.append(objp)
-            corners = cv2.cornerSubPix(gray,corners,(11,11),(-1,-1),criteria)
-            imgpoints.append(corners)
-            cv2.drawChessboardCorners(frame, nCorners, corners, find)
-            
-            frames.append(frame)    
-        
-        if bShow:
-            cv2.imshow('Frame',frame)
-            if cv2.waitKey(delay) & 0xFF == ord('q'):
-               break
-        i = i + 1
-        if idxs.size == 1:
-            break
-        idxs = idxs[1:]
-        
-    else: 
-        break
+idxTotal = 0
+for filename in lsFilename:
+    cap = cv2.VideoCapture(filename)
+    if (cap.isOpened()== False): 
+        print("Error opening video stream or file")
+
+    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     
+    while(cap.isOpened()):
+        ret, frame = cap.read()
+        if ret == True:
+            if idxTotal < idxs[0]:
+                idxTotal += 1
+                continue
+            print "frame ",idxTotal
+
+            gray = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
+            find, corners = cv2.findChessboardCorners(gray, nCorners, None)
+            
+            if find == True:
+                objpoints.append(objp)
+                corners = cv2.cornerSubPix(gray,corners,(11,11),(-1,-1),criteria)
+                imgpoints.append(corners)
+                cv2.drawChessboardCorners(frame, nCorners, corners, find)
+                frames.append(frame)    
+            
+            if bShow:
+                cv2.imshow('Frame',frame)
+                if cv2.waitKey(delay) & 0xFF == ord('q'):
+                   break
+            idxTotal += 1
+            if idxs.size == 1:
+                break
+            idxs = idxs[1:]
+            
+        else: 
+            break
+        
 cap.release()
 cv2.destroyAllWindows()
 
 cali_ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1],None,None)
-
 newcameramtx, roi=cv2.getOptimalNewCameraMatrix(mtx,dist,(w,h),1,(w,h))
 
+print mtx
+print dist
 
 tot_error = 0
 tot_error_undist = 0
 mean_error = 0
 
-def MyProjection(objp, rvec, tvec, mtx):
-    rot, _ = cv2.Rodrigues(rvec)
-    imgp = np.dot(rot,objp.T) + tvec
-    imgp = imgp / imgp[2,:]
-    imgp = np.dot(mtx,imgp)[:2,:].T
-    return imgp
 
-def MyProjection2(objp, rvec, tvec, mtx, dst):
+def MyProjection(objp, rvec, tvec, mtx, dst):
     rot, _ = cv2.Rodrigues(rvec)
     imgp = np.dot(rot,objp.T) + tvec
     imgp = imgp / imgp[2,:]
@@ -107,44 +115,31 @@ def MyProjection2(objp, rvec, tvec, mtx, dst):
     imgp[1,:]= y_new
     
 
-    imgp = np.dot(mtx,imgp)[:2,:].T
+    imgp = np.dot(mtx,imgp)[:2,:].T.astype(objp.dtype)
     return imgp
 
 
-
+cnt_undist = 0
 for frame, rvec, tvec, corners, objp in zip(frames, rvecs, tvecs, imgpoints, objpoints):
     
-    # imgpoints2, _ = cv2.projectPoints(objp, rvec, tvec, mtx, np.zeros(5))
-    imgpoints2, _ = cv2.projectPoints(objp, rvec, tvec, mtx, dist)
-    # imgpoints1 = MyProjection(objp, rvec, tvec, mtx)
-    imgpoints1 = MyProjection2(objp, rvec, tvec, mtx, dist)
-    print cv2.norm(imgpoints1[:,None,:].astype('float32'), imgpoints2, cv2.NORM_L2)
-
-    imgpoints2, _ = cv2.projectPoints(objp, rvec, tvec, mtx, dist)
-    # imgpoints2, _ = cv2.projectPoints(objp, rvec, tvec, mtx, np.zeros(5))
-
-    for p in imgpoints2[:,0,:]:
+    # dist = np.zeros(5)
+    imgp1 = MyProjection(objp, rvec, tvec, mtx, dist)
+    # imgpoints1, _ = cv2.projectPoints(objp, rvec, tvec, mtx, dist)
+    # print cv2.norm(imgpoints1.reshape(imgp1.shape), imgp1, cv2.NORM_L2)
+    
+    for p in imgp1:
         cv2.circle(frame, tuple(p.astype(int)), 1, (0,0,255), 3)
 
-    tot_error += cv2.norm(corners,imgpoints2, cv2.NORM_L2)/len(imgpoints2)
+    tot_error += cv2.norm(corners,imgp1.reshape(corners.shape), cv2.NORM_L2)/len(imgp1)
 
-    # undistort
-    dst = cv2.undistort(frame, mtx, dist, None, newcameramtx)
-     
-    imgpoints2, _ = cv2.projectPoints(objp, rvec, tvec, newcameramtx, dist)
-    # imgpoints2, _ = cv2.projectPoints(objp, rvec, tvec, newcameramtx, np.zeros(5))
-
-    for p in imgpoints2[:,0,:]:
-        cv2.circle(dst, tuple(p.astype(int)), 1, (0,0,255), 3)
-
-    tot_error_undist += cv2.norm(corners,imgpoints2, cv2.NORM_L2)/len(imgpoints2)
-    
     if bShow:
         cv2.imshow('Frame',frame)
-        cv2.imshow('Dst',dst)
+        # cv2.imshow('Dst',dst)
         if cv2.waitKey(delay) & 0xFF == ord('q'):
            break
 
 print "total error: ", tot_error/len(objpoints)
-print "total error: ", tot_error_undist/len(objpoints)
+
+
+
 
