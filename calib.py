@@ -4,7 +4,8 @@
 import cv2
 import numpy as np
 
-bShow = True
+# bShow = True
+bShow = False
 delay = 100
 
 nCorners = (5,7)
@@ -80,10 +81,48 @@ tot_error = 0
 tot_error_undist = 0
 mean_error = 0
 
+def MyProjection(objp, rvec, tvec, mtx):
+    rot, _ = cv2.Rodrigues(rvec)
+    imgp = np.dot(rot,objp.T) + tvec
+    imgp = imgp / imgp[2,:]
+    imgp = np.dot(mtx,imgp)[:2,:].T
+    return imgp
+
+def MyProjection2(objp, rvec, tvec, mtx, dst):
+    rot, _ = cv2.Rodrigues(rvec)
+    imgp = np.dot(rot,objp.T) + tvec
+    imgp = imgp / imgp[2,:]
+
+    x = imgp[0,:]
+    y = imgp[1,:]
+    
+    r = np.sqrt(x**2 + y**2)
+
+    k1, k2, p1, p2, k3 = dst[0]
+    c = (1 + k1*r**2 + k2*r**4 + k3*r**6)/(1)
+    x_new = c*x + 2*p1*x*y + p2*(r**2 + 2*x**2)
+    y_new = c*y + p1*(r**2 + 2*y**2) + 2*p2*x*y
+
+    imgp[0,:]= x_new
+    imgp[1,:]= y_new
+    
+
+    imgp = np.dot(mtx,imgp)[:2,:].T
+    return imgp
+
+
+
 for frame, rvec, tvec, corners, objp in zip(frames, rvecs, tvecs, imgpoints, objpoints):
+    
+    # imgpoints2, _ = cv2.projectPoints(objp, rvec, tvec, mtx, np.zeros(5))
+    imgpoints2, _ = cv2.projectPoints(objp, rvec, tvec, mtx, dist)
+    # imgpoints1 = MyProjection(objp, rvec, tvec, mtx)
+    imgpoints1 = MyProjection2(objp, rvec, tvec, mtx, dist)
+    print cv2.norm(imgpoints1[:,None,:].astype('float32'), imgpoints2, cv2.NORM_L2)
+
     imgpoints2, _ = cv2.projectPoints(objp, rvec, tvec, mtx, dist)
     # imgpoints2, _ = cv2.projectPoints(objp, rvec, tvec, mtx, np.zeros(5))
-    
+
     for p in imgpoints2[:,0,:]:
         cv2.circle(frame, tuple(p.astype(int)), 1, (0,0,255), 3)
 
@@ -109,15 +148,3 @@ for frame, rvec, tvec, corners, objp in zip(frames, rvecs, tvecs, imgpoints, obj
 print "total error: ", tot_error/len(objpoints)
 print "total error: ", tot_error_undist/len(objpoints)
 
-def MyProjection():
-    rot, _ = cv2.Rodrigues(rvec)
-    x = np.dot(rot,objp.T) + tvec
-    x = x / x[2,:]
-    # c = (1 + )
-    # * x[0,:] 
-    diffX = (x[0,:] - w/2)
-    diffY = (x[1,:] - h/2)
-    r = np.sqrt(diffX**2 + diffY**2)
-    # c = 
-
-    x = np.dot(mtx,x)[:2,:]
