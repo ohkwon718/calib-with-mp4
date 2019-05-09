@@ -11,11 +11,8 @@ import dill
 
 print len(sys.argv), sys.argv
 
-# fullpath_out = sys.argv[1]
-# list_fullpath_in = [sys.argv[i] for i in range(2,len(sys.argv))]
-
-fullpath_out = 'out.txt'
-list_fullpath_in = ['video/190502_02-004.mp4']
+fullpath_out = sys.argv[1]
+list_fullpath_in = [sys.argv[i] for i in range(2,len(sys.argv))]
 
 file_out = os.path.basename(fullpath_out)
 filename_out = os.path.splitext(file_out)[0]
